@@ -44,10 +44,25 @@ services:
     networks:
       - resume-network
     restart: always
+  sonarqube:
+    image: sonarqube:latest
+    container_name: sonarqube
+    restart: always
+    ports:
+      - "9000:9000"
+    environment:
+      - SONAR_SEARCH_JAVAADDITIONALOPTS=-Dnode.store.allow_mmap=true
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
 
 # Volume lưu trữ dữ liệu database
 volumes:
   mongo-data:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
 
 # Network kết nối 3 container
 networks:

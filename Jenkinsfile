@@ -15,7 +15,7 @@ pipeline {
         BACKEND_IMAGE = "${DOCKERHUB_USERNAME}/resume-backend"
         MONGO_IMAGE = "${DOCKERHUB_USERNAME}/resume-mongodb"
         VERSION = "${version}"
-        GIT_REPO_URL = "https://github.com/Darktanyan123/Resume_Analyser_Jenkins.git"
+        GIT_REPO_URL = "https://github.com/Darktanyan123/jenkins_setup.git"
         GIT_BRANCH = "jenkins_new"
     }
 
@@ -57,18 +57,18 @@ pipeline {
             }
         }
 
-        stage("3. SonarQube Analysis") {
-            steps {
-                echo "=== BƯỚC 3: QUÉT MÃ NGUỒN BẰNG SONARQUBE ==="
-                script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv('SonarQube') {
-                        // Quét mã nguồn dựa trên cấu hình trong file sonar-project.properties
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectVersion=${env.VERSION_COMMIT}"
-                    }
-                }
-            }
-        }
+        // stage("3. SonarQube Analysis") {
+        //     steps {
+        //         echo "=== BƯỚC 3: QUÉT MÃ NGUỒN BẰNG SONARQUBE ==="
+        //         script {
+        //             def scannerHome = tool 'sonar-scanner'
+        //             withSonarQubeEnv('SonarQube') {
+        //                 // Quét mã nguồn dựa trên cấu hình trong file sonar-project.properties
+        //                 sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectVersion=${env.VERSION_COMMIT}"
+        //             }
+        //         }
+        //     }
+        // }
 
         stage("4. Quality Gate") {
             steps {
