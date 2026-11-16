@@ -17,7 +17,7 @@ pipeline {
     parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'jenkins_new', description: 'Git branch to build')
         string(name: 'DOCKERHUB_USERNAME', defaultValue: 'hoang2207', description: 'Docker Hub account that owns the images')
-        booleanParam(name: 'ENABLE_SONAR', defaultValue: false, description: 'Run SonarQube analysis and wait for its Quality Gate')
+        booleanParam(name: 'ENABLE_SONAR', defaultValue: true, description: 'Run SonarQube analysis and wait for its Quality Gate')
     }
 
     environment {
@@ -125,8 +125,8 @@ pipeline {
                                 "docker build -t ${env.FRONTEND_IMAGE}:${env.VERSION} -t ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT} ."
                             )
                             runCommand(
-                                "docker push ${env.FRONTEND_IMAGE}:${env.VERSION} && docker push ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT}",
-                                "docker push ${env.FRONTEND_IMAGE}:${env.VERSION} && docker push ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT}"
+                                "docker push ${env.FRONTEND_IMAGE}:${env.VERSION}\ndocker push ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT}",
+                                "docker push ${env.FRONTEND_IMAGE}:${env.VERSION}\r\ndocker push ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT}"
                             )
                         }
 
@@ -136,8 +136,8 @@ pipeline {
                                 "docker build -t ${env.BACKEND_IMAGE}:${env.VERSION} -t ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT} ."
                             )
                             runCommand(
-                                "docker push ${env.BACKEND_IMAGE}:${env.VERSION} && docker push ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT}",
-                                "docker push ${env.BACKEND_IMAGE}:${env.VERSION} && docker push ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT}"
+                                "docker push ${env.BACKEND_IMAGE}:${env.VERSION}\ndocker push ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT}",
+                                "docker push ${env.BACKEND_IMAGE}:${env.VERSION}\r\ndocker push ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT}"
                             )
                         }
 
@@ -147,8 +147,8 @@ pipeline {
                                 "docker build -t ${env.MONGO_IMAGE}:${env.VERSION} -t ${env.MONGO_IMAGE}:${env.VERSION_COMMIT} ."
                             )
                             runCommand(
-                                "docker push ${env.MONGO_IMAGE}:${env.VERSION} && docker push ${env.MONGO_IMAGE}:${env.VERSION_COMMIT}",
-                                "docker push ${env.MONGO_IMAGE}:${env.VERSION} && docker push ${env.MONGO_IMAGE}:${env.VERSION_COMMIT}"
+                                "docker push ${env.MONGO_IMAGE}:${env.VERSION}\ndocker push ${env.MONGO_IMAGE}:${env.VERSION_COMMIT}",
+                                "docker push ${env.MONGO_IMAGE}:${env.VERSION}\r\ndocker push ${env.MONGO_IMAGE}:${env.VERSION_COMMIT}"
                             )
                         }
                     }
