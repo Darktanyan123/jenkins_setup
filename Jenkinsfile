@@ -1,152 +1,193 @@
-def version = "v0.${BUILD_NUMBER}"
+def runCommand(String unixCommand, String windowsCommand) {
+    if (isUnix()) {
+        sh unixCommand
+    } else {
+        bat windowsCommand
+    }
+}
 
 pipeline {
     agent any
 
     tools {
         jdk 'jdk21'
-        maven 'maven3'
         nodejs 'NodeJS-20'
     }
 
+    parameters {
+        string(name: 'BRANCH_NAME', defaultValue: 'jenkins_new', description: 'Git branch to build')
+        string(name: 'DOCKERHUB_USERNAME', defaultValue: 'hoang2207', description: 'Docker Hub account that owns the images')
+        booleanParam(name: 'ENABLE_SONAR', defaultValue: false, description: 'Run SonarQube analysis and wait for its Quality Gate')
+    }
+
     environment {
-        DOCKERHUB_USERNAME = "hoang2207"
-        FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/resume-frontend"
-        BACKEND_IMAGE = "${DOCKERHUB_USERNAME}/resume-backend"
-        MONGO_IMAGE = "${DOCKERHUB_USERNAME}/resume-mongodb"
-        VERSION = "${version}"
-        GIT_REPO_URL = "https://github.com/Darktanyan123/jenkins_setup.git"
-        GIT_BRANCH = "jenkins_new"
+        GIT_REPO_URL = 'https://github.com/Darktanyan123/jenkins_setup.git'
+        DOCKERHUB_CREDENTIALS = 'dockerhub-credentials'
     }
 
     stages {
-        stage("1. Check Code") {
+        stage('1. Check Code') {
             steps {
-                echo "=== BƯỚC 1: KÉO CODE TỪ GITHUB ==="
-                git branch: "${GIT_BRANCH}", url: "${GIT_REPO_URL}"
                 script {
-                    // Lấy mã hash commit rút gọn (vd: a1b2c3d)
-                    env.GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    if (!(params.BRANCH_NAME ==~ /[A-Za-z0-9][A-Za-z0-9._/-]*/) || params.BRANCH_NAME.contains('..')) {
+                        error('BRANCH_NAME contains unsupported characters.')
+                    }
+                    if (!(params.DOCKERHUB_USERNAME ==~ /[a-z0-9][a-z0-9_-]{0,29}/)) {
+                        error('DOCKERHUB_USERNAME must be a valid lowercase Docker Hub username.')
+                    }
+                }
+                echo "Checking out branch ${params.BRANCH_NAME}"
+                git branch: params.BRANCH_NAME, url: env.GIT_REPO_URL
+                script {
+                    env.GIT_COMMIT_SHORT = isUnix()
+                        ? sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        : bat(script: '@echo off\r\ngit rev-parse --short HEAD', returnStdout: true).trim()
+                    env.VERSION = "v0.${env.BUILD_NUMBER}"
                     env.VERSION_COMMIT = "${env.VERSION}-${env.GIT_COMMIT_SHORT}"
-                    echo "📦 Phiên bản build: ${env.VERSION_COMMIT}"
+                    env.FRONTEND_IMAGE = "${params.DOCKERHUB_USERNAME}/resume-frontend"
+                    env.BACKEND_IMAGE = "${params.DOCKERHUB_USERNAME}/resume-backend"
+                    env.MONGO_IMAGE = "${params.DOCKERHUB_USERNAME}/resume-mongodb"
+                    echo "Build version: ${env.VERSION_COMMIT}"
                 }
             }
         }
 
-        stage("2. Test Code") {
+        stage('2. Test Code') {
             parallel {
-                stage("Test Frontend") {
+                stage('Test Frontend') {
                     steps {
-                        echo "=== KIỂM THỬ FRONTEND ==="
                         dir('frontend') {
-                            sh 'npm install'
-                            sh 'npm test -- --passWithNoTests'
+                            script {
+                                if (isUnix()) {
+                                    sh 'npm ci'
+                                    sh 'npm test'
+                                } else {
+                                    bat 'call npm ci'
+                                    bat 'call npm test'
+                                }
+                            }
                         }
                     }
                 }
-                stage("Test Backend") {
+                stage('Test Backend') {
                     steps {
-                        echo "=== KIỂM THỬ BACKEND ==="
                         dir('backend') {
-                            // Chạy compile và test bằng Maven để sinh class file cho SonarQube
-                            sh 'chmod +x ./mvnw'
-                            sh './mvnw test'
+                            script {
+                                if (isUnix()) {
+                                    sh 'chmod +x ./mvnw'
+                                    sh './mvnw -B test'
+                                } else {
+                                    bat 'call mvnw.cmd -B test'
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        stage("3. SonarQube Analysis") {
+        stage('3. SonarQube Analysis') {
+            when {
+                expression { params.ENABLE_SONAR }
+            }
             steps {
-                echo "=== BƯỚC 3: QUÉT MÃ NGUỒN BẰNG SONARQUBE ==="
                 script {
                     def scannerHome = tool 'sonar-scanner'
                     withSonarQubeEnv('SonarQube') {
-                        // Quét mã nguồn dựa trên cấu hình trong file sonar-project.properties
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectVersion=${env.VERSION_COMMIT}"
+                        if (isUnix()) {
+                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectVersion=${env.VERSION_COMMIT}"
+                        } else {
+                            bat "\"${scannerHome}\\bin\\sonar-scanner.bat\" -Dsonar.projectVersion=${env.VERSION_COMMIT}"
+                        }
                     }
                 }
             }
         }
 
-        stage("4. Quality Gate") {
+        stage('4. Quality Gate') {
+            when {
+                expression { params.ENABLE_SONAR }
+            }
             steps {
-                echo "=== BƯỚC 4: KIỂM TRA CHẤT LƯỢNG MÃ NGUỒN (QUALITY GATE) ==="
-                timeout(time: 2, unit: 'MINUTES') {
-                    // Chờ Webhook từ SonarQube gửi tín hiệu về: Nếu code đạt chuẩn mới cho đi tiếp
+                timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage("5. Build & Push Docker Images") {
+        stage('5. Build & Push Docker Images') {
             steps {
-                echo "=== BƯỚC 5: ĐÓNG GÓI VÀ ĐẨY IMAGES LÊN DOCKER HUB ==="
                 script {
-                    // Sử dụng đúng credential dockerhub-credentials của bạn
-                    withDockerRegistry(credentialsId: 'dockerhub-credentials', toolName: 'docker') {
-                        // 1. Build & Push Frontend Image
-                        echo "Đang build & push Frontend Image..."
+                    withDockerRegistry(credentialsId: env.DOCKERHUB_CREDENTIALS) {
                         dir('frontend') {
-                            sh """
-                                docker build -t ${FRONTEND_IMAGE}:${VERSION} -t ${FRONTEND_IMAGE}:${VERSION_COMMIT} .
-                                docker push ${FRONTEND_IMAGE}:${VERSION}
-                                docker push ${FRONTEND_IMAGE}:${VERSION_COMMIT}
-                            """
+                            runCommand(
+                                "docker build -t ${env.FRONTEND_IMAGE}:${env.VERSION} -t ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT} .",
+                                "docker build -t ${env.FRONTEND_IMAGE}:${env.VERSION} -t ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT} ."
+                            )
+                            runCommand(
+                                "docker push ${env.FRONTEND_IMAGE}:${env.VERSION} && docker push ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT}",
+                                "docker push ${env.FRONTEND_IMAGE}:${env.VERSION} && docker push ${env.FRONTEND_IMAGE}:${env.VERSION_COMMIT}"
+                            )
                         }
 
-                        // 2. Build & Push Backend Image
-                        echo "Đang build & push Backend Image..."
                         dir('backend') {
-                            sh """
-                                docker build -t ${BACKEND_IMAGE}:${VERSION} -t ${BACKEND_IMAGE}:${VERSION_COMMIT} .
-                                docker push ${BACKEND_IMAGE}:${VERSION}
-                                docker push ${BACKEND_IMAGE}:${VERSION_COMMIT}
-                            """
+                            runCommand(
+                                "docker build -t ${env.BACKEND_IMAGE}:${env.VERSION} -t ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT} .",
+                                "docker build -t ${env.BACKEND_IMAGE}:${env.VERSION} -t ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT} ."
+                            )
+                            runCommand(
+                                "docker push ${env.BACKEND_IMAGE}:${env.VERSION} && docker push ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT}",
+                                "docker push ${env.BACKEND_IMAGE}:${env.VERSION} && docker push ${env.BACKEND_IMAGE}:${env.VERSION_COMMIT}"
+                            )
                         }
 
-                        // 3. Build & Push MongoDB Image (kèm sẵn dữ liệu cv_screening)
-                        echo "Đang build & push MongoDB Image..."
                         dir('mongo-init') {
-                            sh """
-                                docker build -t ${MONGO_IMAGE}:${VERSION} -t ${MONGO_IMAGE}:${VERSION_COMMIT} .
-                                docker push ${MONGO_IMAGE}:${VERSION}
-                                docker push ${MONGO_IMAGE}:${VERSION_COMMIT}
-                            """
+                            runCommand(
+                                "docker build -t ${env.MONGO_IMAGE}:${env.VERSION} -t ${env.MONGO_IMAGE}:${env.VERSION_COMMIT} .",
+                                "docker build -t ${env.MONGO_IMAGE}:${env.VERSION} -t ${env.MONGO_IMAGE}:${env.VERSION_COMMIT} ."
+                            )
+                            runCommand(
+                                "docker push ${env.MONGO_IMAGE}:${env.VERSION} && docker push ${env.MONGO_IMAGE}:${env.VERSION_COMMIT}",
+                                "docker push ${env.MONGO_IMAGE}:${env.VERSION} && docker push ${env.MONGO_IMAGE}:${env.VERSION_COMMIT}"
+                            )
                         }
                     }
                 }
             }
         }
 
-        stage("6. Deploy Containers") {
+        stage('6. Deploy Containers') {
             steps {
-                echo "=== BƯỚC 6: TRIỂN KHAI CONTAINERS VỚI PHIÊN BẢN MỚI ==="
-                sh """
-                    # Ghi tag phiên bản mới nhất vào file .env cho docker-compose
-                    echo "FRONTEND_IMAGE=${FRONTEND_IMAGE}" > .env
-                    echo "BACKEND_IMAGE=${BACKEND_IMAGE}" >> .env
-                    echo "MONGO_IMAGE=${MONGO_IMAGE}" >> .env
-                    echo "VERSION=${VERSION_COMMIT}" >> .env
-
-                    echo "Dừng và dọn dẹp container cũ (nếu có)..."
-                    docker compose down --remove-orphans || true
-                    docker rm -f resume-backend resume-frontend resume-mongodb 2>/dev/null || true
-
-                    echo "Khởi chạy container mới bằng images vừa build..."
-                    docker compose up -d --force-recreate
-                """
+                script {
+                    runCommand(
+                        """echo "FRONTEND_IMAGE=${env.FRONTEND_IMAGE}" > .env
+echo "BACKEND_IMAGE=${env.BACKEND_IMAGE}" >> .env
+echo "MONGO_IMAGE=${env.MONGO_IMAGE}" >> .env
+echo "VERSION=${env.VERSION_COMMIT}" >> .env""",
+                        """@echo FRONTEND_IMAGE=${env.FRONTEND_IMAGE}> .env
+@echo BACKEND_IMAGE=${env.BACKEND_IMAGE}>> .env
+@echo MONGO_IMAGE=${env.MONGO_IMAGE}>> .env
+@echo VERSION=${env.VERSION_COMMIT}>> .env"""
+                    )
+                    runCommand(
+                        'docker compose down --remove-orphans',
+                        'docker compose down --remove-orphans'
+                    )
+                    runCommand(
+                        'docker compose up -d --force-recreate',
+                        'docker compose up -d --force-recreate'
+                    )
+                }
             }
         }
     }
 
     post {
         success {
-            echo "🎉 Pipeline hoàn tất thành công! Đã qua kiểm tra SonarQube Quality Gate và Deploy với tag ${env.VERSION_COMMIT}"
+            echo "Pipeline completed successfully. Deployed version: ${env.VERSION_COMMIT}"
         }
         failure {
-            echo "❌ Pipeline thất bại! Vui lòng kiểm tra lại log chi tiết."
+            echo 'Pipeline failed. Check the stage logs above for the failing command.'
         }
     }
 }

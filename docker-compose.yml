@@ -7,7 +7,7 @@ services:
 
   # --- Database MongoDB (Đã đóng gói sẵn 100% dữ liệu cv_screening) ---
   mongodb:
-    image: ${MONGO_IMAGE:-antony1552006/resume-mongodb}:${VERSION:-latest}
+    image: ${MONGO_IMAGE:-hoang2207/resume-mongodb}:${VERSION:-latest}
     container_name: resume-mongodb
     ports:
       - "27017:27017"
@@ -20,7 +20,7 @@ services:
 
   # --- Backend (Spring Boot API) ---
   backend:
-    image: ${BACKEND_IMAGE:-antony1552006/resume-backend}:${VERSION:-latest}
+    image: ${BACKEND_IMAGE:-hoang2207/resume-backend}:${VERSION:-latest}
     container_name: resume-backend
     ports:
       - "8081:8080"
@@ -35,7 +35,7 @@ services:
 
   # --- Frontend (React + Nginx) ---
   frontend:
-    image: ${FRONTEND_IMAGE:-antony1552006/resume-frontend}:${VERSION:-latest}
+    image: ${FRONTEND_IMAGE:-hoang2207/resume-frontend}:${VERSION:-latest}
     container_name: resume-frontend
     ports:
       - "3000:80"
@@ -44,28 +44,11 @@ services:
     networks:
       - resume-network
     restart: always
-  sonarqube:
-    image: sonarqube:latest
-    container_name: sonarqube
-    restart: always
-    ports:
-      - "9000:9000"
-    environment:
-      - SONAR_SEARCH_JAVAADDITIONALOPTS=-Dnode.store.allow_mmap=true
-    volumes:
-      - sonarqube_data:/opt/sonarqube/data
-      - sonarqube_logs:/opt/sonarqube/logs
-      - sonarqube_extensions:/opt/sonarqube/extensions
-
 # Volume lưu trữ dữ liệu database
 volumes:
   mongo-data:
-  sonarqube_data:
-  sonarqube_logs:
-  sonarqube_extensions:
 
 # Network kết nối 3 container
 networks:
   resume-network:
     name: resume-network
-    external: true
