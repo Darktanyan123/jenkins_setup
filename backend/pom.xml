@@ -103,6 +103,14 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		
+		<dependency>
+  			<groupId>de.flapdoodle.embed</groupId>
+   			<artifactId>de.flapdoodle.embed.mongo.spring30x</artifactId>
+ 			<version>4.5.2</version> <!-- Nên kiểm tra phiên bản mới nhất -->
+   			<scope>test</scope>
+		</dependency>
+		
 
 	</dependencies>
 
