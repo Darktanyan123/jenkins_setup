@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "9000:9000"
+    environment:
+      - SONAR_VALIDATE_WEBHOOKS=false   
     volumes:
       - sonarqube_data:/opt/sonarqube/data
       - sonarqube_extensions:/opt/sonarqube/extensions
